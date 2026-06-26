@@ -21,6 +21,48 @@ async def on_ready():
     print("📢 Bot siap digunakan!")
 
 
+@bot.event
+async def on_member_join(member: discord.Member):
+    guild = member.guild
+    welcome_ch = discord.utils.get(guild.text_channels, name="👋│welcome")
+    rules_ch = guild.get_channel(RULES_CHANNEL_ID)
+
+    # Auto-role Member
+    member_role = discord.utils.get(guild.roles, name="Member")
+    if member_role:
+        await member.add_roles(member_role)
+
+    if not welcome_ch:
+        return
+
+    embed = discord.Embed(
+        title="👋 Selamat Datang!",
+        description=f"Halo {member.mention}, selamat datang di **{guild.name}**!\nJangan lupa baca {rules_ch.mention} ya! 🎉",
+        color=discord.Color.from_str("#23a55a")
+    )
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.set_footer(text=f"Member ke-{guild.member_count}")
+
+    await welcome_ch.send(embed=embed)
+
+
+@bot.event
+async def on_member_update(before: discord.Member, after: discord.Member):
+    if before.premium_since is None and after.premium_since is not None:
+        guild = after.guild
+        boost_ch = discord.utils.get(guild.text_channels, name="🚀│server-boost")
+        if not boost_ch:
+            return
+
+        embed = discord.Embed(
+            title="🚀 Server Boosted!",
+            description=f"{after.mention} baru saja boost server ini!\nServer sekarang level **{guild.premium_tier}** dengan **{guild.premium_subscription_count}** boost 💜",
+            color=discord.Color.from_str("#ff73fa")
+        )
+        embed.set_thumbnail(url=after.display_avatar.url)
+        await boost_ch.send(embed=embed)
+
+
 @bot.command(name="anc")
 async def announcement(ctx, *, pesan: str):
     if not isinstance(ctx.channel, discord.DMChannel):
