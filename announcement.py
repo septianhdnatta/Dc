@@ -1,16 +1,19 @@
 import discord
 from discord.ext import commands
 import os
+import asyncio
 
 # ================================
 GUILD_ID = 1514258098217418772
 RULES_CHANNEL_ID = 1518140282670157954
+AUTO_JOIN_CHANNEL = "🔊│voice-1"  # Nama voice channel yang di-auto join bot
 # ================================
 
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True
 intents.message_content = True
+intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -20,6 +23,37 @@ async def on_ready():
     print(f"✅ Login sebagai {bot.user}")
     print("📢 Bot siap digunakan!")
 
+    # Auto join voice channel saat bot online
+    await auto_join_voice()
+
+
+async def auto_join_voice():
+    """Bot otomatis join voice channel saat startup."""
+    guild = bot.get_guild(GUILD_ID)
+    if guild is None:
+        print("❌ Guild tidak ditemukan untuk auto-join voice.")
+        return
+
+    channel = discord.utils.get(guild.voice_channels, name=AUTO_JOIN_CHANNEL)
+    if channel is None:
+        print(f"❌ Voice channel '{AUTO_JOIN_CHANNEL}' tidak ditemukan.")
+        return
+
+    # Cek kalau bot sudah ada di voice
+    if guild.voice_client:
+        await guild.voice_client.disconnect()
+        await asyncio.sleep(1)
+
+    try:
+        await channel.connect()
+        print(f"🔊 Bot auto-join ke: {channel.name}")
+    except Exception as e:
+        print(f"❌ Gagal join voice: {e}")
+
+
+# ════════════════════════════════
+#  EVENTS
+# ════════════════════════════════
 
 @bot.event
 async def on_member_join(member: discord.Member):
@@ -42,7 +76,6 @@ async def on_member_join(member: discord.Member):
     )
     embed.set_thumbnail(url=member.display_avatar.url)
     embed.set_footer(text=f"Member ke-{guild.member_count}")
-
     await welcome_ch.send(embed=embed)
 
 
@@ -62,6 +95,55 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         embed.set_thumbnail(url=after.display_avatar.url)
         await boost_ch.send(embed=embed)
 
+
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    """Auto rejoin jika bot di-disconnect dari voice."""
+    if member.id != bot.user.id:
+        return
+    # Bot di-disconnect (bukan pindah channel)
+    if before.channel is not None and after.channel is None:
+        print("⚠️ Bot di-disconnect dari voice, mencoba rejoin...")
+        await asyncio.sleep(3)
+        await auto_join_voice()
+
+
+# ════════════════════════════════
+#  VOICE COMMANDS
+# ════════════════════════════════
+
+@bot.command(name="join")
+async def join(ctx):
+    """Bot join voice channel yang sedang kamu pakai."""
+    if ctx.author.voice is None:
+        await ctx.send("❌ Kamu harus berada di voice channel dulu!")
+        return
+
+    channel = ctx.author.voice.channel
+
+    if ctx.voice_client:
+        await ctx.voice_client.move_to(channel)
+        await ctx.send(f"🔊 Pindah ke **{channel.name}**!")
+    else:
+        await channel.connect()
+        await ctx.send(f"🔊 Join ke **{channel.name}**!")
+
+
+@bot.command(name="leave")
+async def leave(ctx):
+    """Bot leave voice channel."""
+    if ctx.voice_client is None:
+        await ctx.send("❌ Bot tidak sedang di voice channel!")
+        return
+
+    channel_name = ctx.voice_client.channel.name
+    await ctx.voice_client.disconnect()
+    await ctx.send(f"👋 Leave dari **{channel_name}**!")
+
+
+# ════════════════════════════════
+#  DM COMMANDS
+# ════════════════════════════════
 
 @bot.command(name="anc")
 async def announcement(ctx, *, pesan: str):
