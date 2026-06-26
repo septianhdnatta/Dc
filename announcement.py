@@ -6,7 +6,7 @@ import asyncio
 # ================================
 GUILD_ID = 1514258098217418772
 RULES_CHANNEL_ID = 1518140282670157954
-AUTO_JOIN_CHANNEL = "🔊│voice-1"  # Nama voice channel yang di-auto join bot
+AUTO_JOIN_CHANNEL = "💤│afk"  # Nama voice channel yang di-auto join bot
 # ================================
 
 intents = discord.Intents.default()
