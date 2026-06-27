@@ -183,18 +183,20 @@ async def announcement(ctx, *, pesan: str = ""):
                 image_url = att.url
                 break  # ambil gambar pertama saja
 
-    embed = discord.Embed(
-        description=pesan if pesan else None,
-        color=discord.Color.from_str("#5865f2")
-    )
+    embed = discord.Embed(color=discord.Color.from_str("#5865f2"))
     embed.set_author(
         name=ctx.author.display_name,
         icon_url=ctx.author.display_avatar.url
     )
-    embed.set_footer(text="📢 Announcement")
 
     if image_url:
         embed.set_image(url=image_url)
+
+    # Teks muncul di bawah foto
+    if pesan:
+        embed.add_field(name="", value=pesan, inline=False)
+
+    embed.set_footer(text="📢 Announcement")
 
     await announce_ch.send("@everyone", embed=embed)
     await ctx.send("✅ Announcement berhasil dikirim!")
@@ -231,13 +233,17 @@ async def rules(ctx, *, isi: str = ""):
 
     embed = discord.Embed(
         title="📋 Rules Server",
-        description=isi if isi else None,
         color=discord.Color.from_str("#ff7043")
     )
-    embed.set_footer(text="Harap patuhi rules yang berlaku!")
 
     if image_url:
         embed.set_image(url=image_url)
+
+    # Teks muncul di bawah foto
+    if isi:
+        embed.add_field(name="", value=isi, inline=False)
+
+    embed.set_footer(text="Harap patuhi rules yang berlaku!")
 
     await rules_ch.send(embed=embed)
     await ctx.send("✅ Rules berhasil dikirim!")
