@@ -174,19 +174,14 @@ async def announcement(ctx, *, pesan: str = ""):
         await ctx.send("❌ Channel announcement tidak ditemukan!")
         return
 
-    # Cek ada gambar atau tidak
+    # Cek ada gambar/gif atau tidak — hanya pakai URL, tidak kirim ulang sebagai file
     image_url = None
-    files = []
     if ctx.message.attachments:
         for att in ctx.message.attachments:
-            if att.content_type and att.content_type.startswith("image/"):
-                # Gambar pertama jadi image embed
-                if image_url is None:
-                    image_url = att.url
-                # Gambar/file lain tetap dikirim sebagai file
-                files.append(await att.to_file())
-            else:
-                files.append(await att.to_file())
+            ct = att.content_type or ""
+            if ct.startswith("image/") or ct == "image/gif":
+                image_url = att.url
+                break  # ambil gambar pertama saja
 
     embed = discord.Embed(
         description=pesan if pesan else None,
@@ -201,7 +196,7 @@ async def announcement(ctx, *, pesan: str = ""):
     if image_url:
         embed.set_image(url=image_url)
 
-    await announce_ch.send("@everyone", embed=embed, files=files if files else None)
+    await announce_ch.send("@everyone", embed=embed)
     await ctx.send("✅ Announcement berhasil dikirim!")
 
 
@@ -225,17 +220,14 @@ async def rules(ctx, *, isi: str = ""):
         await ctx.send("❌ Channel rules tidak ditemukan!")
         return
 
-    # Cek ada gambar atau tidak
+    # Cek ada gambar/gif atau tidak — hanya pakai URL, tidak kirim ulang sebagai file
     image_url = None
-    files = []
     if ctx.message.attachments:
         for att in ctx.message.attachments:
-            if att.content_type and att.content_type.startswith("image/"):
-                if image_url is None:
-                    image_url = att.url
-                files.append(await att.to_file())
-            else:
-                files.append(await att.to_file())
+            ct = att.content_type or ""
+            if ct.startswith("image/") or ct == "image/gif":
+                image_url = att.url
+                break  # ambil gambar pertama saja
 
     embed = discord.Embed(
         title="📋 Rules Server",
@@ -247,7 +239,7 @@ async def rules(ctx, *, isi: str = ""):
     if image_url:
         embed.set_image(url=image_url)
 
-    await rules_ch.send(embed=embed, files=files if files else None)
+    await rules_ch.send(embed=embed)
     await ctx.send("✅ Rules berhasil dikirim!")
 
 
