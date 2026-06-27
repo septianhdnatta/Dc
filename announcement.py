@@ -6,7 +6,7 @@ import asyncio
 # ================================
 GUILD_ID = 1514258098217418772
 RULES_CHANNEL_ID = 1518140282670157954
-AUTO_JOIN_CHANNEL = "💤│afk"  # Nama voice channel yang di-auto join bot
+AUTO_JOIN_CHANNEL = "🔊│voice-2"
 # ================================
 
 intents = discord.Intents.default()
@@ -22,13 +22,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ Login sebagai {bot.user}")
     print("📢 Bot siap digunakan!")
-
-    # Auto join voice channel saat bot online
     await auto_join_voice()
 
 
 async def auto_join_voice():
-    """Bot otomatis join voice channel saat startup."""
     guild = bot.get_guild(GUILD_ID)
     if guild is None:
         print("❌ Guild tidak ditemukan untuk auto-join voice.")
@@ -39,7 +36,6 @@ async def auto_join_voice():
         print(f"❌ Voice channel '{AUTO_JOIN_CHANNEL}' tidak ditemukan.")
         return
 
-    # Cek kalau bot sudah ada di voice
     if guild.voice_client:
         await guild.voice_client.disconnect()
         await asyncio.sleep(1)
@@ -61,7 +57,6 @@ async def on_member_join(member: discord.Member):
     welcome_ch = discord.utils.get(guild.text_channels, name="👋│welcome")
     rules_ch = guild.get_channel(RULES_CHANNEL_ID)
 
-    # Auto-role Member
     member_role = discord.utils.get(guild.roles, name="Member")
     if member_role:
         await member.add_roles(member_role)
@@ -98,10 +93,8 @@ async def on_member_update(before: discord.Member, after: discord.Member):
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-    """Auto rejoin jika bot di-disconnect dari voice."""
     if member.id != bot.user.id:
         return
-    # Bot di-disconnect (bukan pindah channel)
     if before.channel is not None and after.channel is None:
         print("⚠️ Bot di-disconnect dari voice, mencoba rejoin...")
         await asyncio.sleep(3)
@@ -114,13 +107,10 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
 @bot.command(name="join")
 async def join(ctx):
-    """Bot join voice channel yang sedang kamu pakai."""
     if ctx.author.voice is None:
         await ctx.send("❌ Kamu harus berada di voice channel dulu!")
         return
-
     channel = ctx.author.voice.channel
-
     if ctx.voice_client:
         await ctx.voice_client.move_to(channel)
         await ctx.send(f"🔊 Pindah ke **{channel.name}**!")
@@ -131,11 +121,9 @@ async def join(ctx):
 
 @bot.command(name="leave")
 async def leave(ctx):
-    """Bot leave voice channel."""
     if ctx.voice_client is None:
         await ctx.send("❌ Bot tidak sedang di voice channel!")
         return
-
     channel_name = ctx.voice_client.channel.name
     await ctx.voice_client.disconnect()
     await ctx.send(f"👋 Leave dari **{channel_name}**!")
@@ -145,25 +133,40 @@ async def leave(ctx):
 #  DM COMMANDS
 # ════════════════════════════════
 
+def is_founder(member: discord.Member) -> bool:
+    founder_role = discord.utils.get(member.guild.roles, name="Founder")
+    return founder_role in member.roles
+
+
+async def get_guild_member(ctx):
+    """Helper: ambil guild & member, cek founder."""
+    guild = bot.get_guild(GUILD_ID)
+    if guild is None:
+        await ctx.send("❌ Server tidak ditemukan!")
+        return None, None
+    member = guild.get_member(ctx.author.id)
+    if member is None:
+        await ctx.send("❌ Kamu bukan member server!")
+        return None, None
+    if not is_founder(member):
+        await ctx.send("❌ Kamu tidak punya permission!")
+        return None, None
+    return guild, member
+
+
 @bot.command(name="anc")
-async def announcement(ctx, *, pesan: str):
+async def announcement(ctx, *, pesan: str = ""):
+    """
+    Kirim announcement ke #📢│announcement via DM.
+    Bisa dengan teks saja, gambar saja, atau keduanya.
+    Usage: !anc [teks] + (opsional: attach gambar)
+    """
     if not isinstance(ctx.channel, discord.DMChannel):
         await ctx.send("❌ Command ini hanya bisa dipakai lewat DM bot!")
         return
 
-    guild = bot.get_guild(GUILD_ID)
+    guild, member = await get_guild_member(ctx)
     if guild is None:
-        await ctx.send("❌ Server tidak ditemukan!")
-        return
-
-    member = guild.get_member(ctx.author.id)
-    if member is None:
-        await ctx.send("❌ Kamu bukan member server!")
-        return
-
-    founder_role = discord.utils.get(guild.roles, name="Founder")
-    if founder_role not in member.roles:
-        await ctx.send("❌ Kamu tidak punya permission!")
         return
 
     announce_ch = discord.utils.get(guild.text_channels, name="📢│announcement")
@@ -171,36 +174,50 @@ async def announcement(ctx, *, pesan: str):
         await ctx.send("❌ Channel announcement tidak ditemukan!")
         return
 
+    # Cek ada gambar atau tidak
+    image_url = None
+    files = []
+    if ctx.message.attachments:
+        for att in ctx.message.attachments:
+            if att.content_type and att.content_type.startswith("image/"):
+                # Gambar pertama jadi image embed
+                if image_url is None:
+                    image_url = att.url
+                # Gambar/file lain tetap dikirim sebagai file
+                files.append(await att.to_file())
+            else:
+                files.append(await att.to_file())
+
     embed = discord.Embed(
-        description=pesan,
+        description=pesan if pesan else None,
         color=discord.Color.from_str("#5865f2")
     )
-    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+    embed.set_author(
+        name=ctx.author.display_name,
+        icon_url=ctx.author.display_avatar.url
+    )
     embed.set_footer(text="📢 Announcement")
 
-    await announce_ch.send("@everyone", embed=embed)
+    if image_url:
+        embed.set_image(url=image_url)
+
+    await announce_ch.send("@everyone", embed=embed, files=files if files else None)
     await ctx.send("✅ Announcement berhasil dikirim!")
 
 
 @bot.command(name="rules")
-async def rules(ctx, *, isi: str):
+async def rules(ctx, *, isi: str = ""):
+    """
+    Kirim rules ke channel rules via DM.
+    Bisa dengan teks saja, gambar saja, atau keduanya.
+    Usage: !rules [teks] + (opsional: attach gambar)
+    """
     if not isinstance(ctx.channel, discord.DMChannel):
         await ctx.send("❌ Command ini hanya bisa dipakai lewat DM bot!")
         return
 
-    guild = bot.get_guild(GUILD_ID)
+    guild, member = await get_guild_member(ctx)
     if guild is None:
-        await ctx.send("❌ Server tidak ditemukan!")
-        return
-
-    member = guild.get_member(ctx.author.id)
-    if member is None:
-        await ctx.send("❌ Kamu bukan member server!")
-        return
-
-    founder_role = discord.utils.get(guild.roles, name="Founder")
-    if founder_role not in member.roles:
-        await ctx.send("❌ Kamu tidak punya permission!")
         return
 
     rules_ch = guild.get_channel(RULES_CHANNEL_ID)
@@ -208,14 +225,29 @@ async def rules(ctx, *, isi: str):
         await ctx.send("❌ Channel rules tidak ditemukan!")
         return
 
+    # Cek ada gambar atau tidak
+    image_url = None
+    files = []
+    if ctx.message.attachments:
+        for att in ctx.message.attachments:
+            if att.content_type and att.content_type.startswith("image/"):
+                if image_url is None:
+                    image_url = att.url
+                files.append(await att.to_file())
+            else:
+                files.append(await att.to_file())
+
     embed = discord.Embed(
         title="📋 Rules Server",
-        description=isi,
+        description=isi if isi else None,
         color=discord.Color.from_str("#ff7043")
     )
     embed.set_footer(text="Harap patuhi rules yang berlaku!")
 
-    await rules_ch.send(embed=embed)
+    if image_url:
+        embed.set_image(url=image_url)
+
+    await rules_ch.send(embed=embed, files=files if files else None)
     await ctx.send("✅ Rules berhasil dikirim!")
 
 
