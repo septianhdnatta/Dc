@@ -232,7 +232,7 @@ async def rules(ctx, *, isi: str = ""):
                 break  # ambil gambar pertama saja
 
     embed = discord.Embed(
-        title="📋 Rules Server",
+        title="N4CX RULES SERVER",
         color=discord.Color.from_str("#ff7043")
     )
 
