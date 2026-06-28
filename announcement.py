@@ -183,22 +183,44 @@ async def announcement(ctx, *, pesan: str = ""):
                 image_url = att.url
                 break  # ambil gambar pertama saja
 
-    embed = discord.Embed(color=discord.Color.from_str("#5865f2"))
-    embed.set_author(
-        name=ctx.author.display_name,
-        icon_url=ctx.author.display_avatar.url
-    )
+    if image_url and pesan:
+        # Kirim gambar dulu
+        img_embed = discord.Embed(color=discord.Color.from_str("#5865f2"))
+        img_embed.set_image(url=image_url)
+        await announce_ch.send("@everyone", embed=img_embed)
 
-    if image_url:
-        embed.set_image(url=image_url)
+        # Lalu kirim teks di bawahnya
+        txt_embed = discord.Embed(
+            description=pesan,
+            color=discord.Color.from_str("#5865f2")
+        )
+        txt_embed.set_author(
+            name=ctx.author.display_name,
+            icon_url=ctx.author.display_avatar.url
+        )
+        txt_embed.set_footer(text="📢 Announcement")
+        await announce_ch.send(embed=txt_embed)
 
-    # Teks muncul di bawah foto
-    if pesan:
-        embed.add_field(name="", value=pesan, inline=False)
+    elif image_url:
+        # Hanya gambar
+        img_embed = discord.Embed(color=discord.Color.from_str("#5865f2"))
+        img_embed.set_image(url=image_url)
+        img_embed.set_footer(text="📢 Announcement")
+        await announce_ch.send("@everyone", embed=img_embed)
 
-    embed.set_footer(text="📢 Announcement")
+    else:
+        # Hanya teks
+        txt_embed = discord.Embed(
+            description=pesan,
+            color=discord.Color.from_str("#5865f2")
+        )
+        txt_embed.set_author(
+            name=ctx.author.display_name,
+            icon_url=ctx.author.display_avatar.url
+        )
+        txt_embed.set_footer(text="📢 Announcement")
+        await announce_ch.send("@everyone", embed=txt_embed)
 
-    await announce_ch.send("@everyone", embed=embed)
     await ctx.send("✅ Announcement berhasil dikirim!")
 
 
@@ -231,22 +253,184 @@ async def rules(ctx, *, isi: str = ""):
                 image_url = att.url
                 break  # ambil gambar pertama saja
 
+    if image_url and isi:
+        # Kirim gambar dulu
+        img_embed = discord.Embed(color=discord.Color.from_str("#ff7043"))
+        img_embed.set_image(url=image_url)
+        await rules_ch.send(embed=img_embed)
+
+        # Lalu teks di bawahnya
+        txt_embed = discord.Embed(
+            title="📋 Rules Server",
+            description=isi,
+            color=discord.Color.from_str("#ff7043")
+        )
+        txt_embed.set_footer(text="Harap patuhi rules yang berlaku!")
+        await rules_ch.send(embed=txt_embed)
+
+    elif image_url:
+        img_embed = discord.Embed(color=discord.Color.from_str("#ff7043"))
+        img_embed.set_image(url=image_url)
+        img_embed.set_footer(text="Harap patuhi rules yang berlaku!")
+        await rules_ch.send(embed=img_embed)
+
+    else:
+        txt_embed = discord.Embed(
+            title="📋 Rules Server",
+            description=isi,
+            color=discord.Color.from_str("#ff7043")
+        )
+        txt_embed.set_footer(text="Harap patuhi rules yang berlaku!")
+        await rules_ch.send(embed=txt_embed)
+
+    await ctx.send("✅ Rules berhasil dikirim!")
+
+
+bot.run(os.environ.get("TOKEN"))
+
+
+# ════════════════════════════════
+#  MODRINTH API
+# ════════════════════════════════
+
+import aiohttp
+
+MODRINTH_API = "https://api.modrinth.com/v2"
+MODRINTH_HEADERS = {"User-Agent": "N4CX-Bot/1.0"}
+
+FACET_MAP = {
+    "mod":    '[["project_type:mod"]]',
+    "shader": '[["project_type:shader"]]',
+    "rp":     '[["project_type:resourcepack"]]',
+}
+
+LABEL_MAP = {
+    "mod":    "🔧 Mod",
+    "shader": "✨ Shader",
+    "rp":     "📦 Resource Pack",
+}
+
+
+async def search_modrinth(query: str, facet_type: str):
+    params = {
+        "query": query,
+        "facets": FACET_MAP[facet_type],
+        "limit": 5,
+    }
+    async with aiohttp.ClientSession(headers=MODRINTH_HEADERS) as session:
+        async with session.get(f"{MODRINTH_API}/search", params=params) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+            return data.get("hits", [])
+
+
+def make_modrinth_embed(hit: dict, facet_type: str, index: int, total: int) -> discord.Embed:
+    title    = hit.get("title", "Unknown")
+    desc     = hit.get("description", "No description.")
+    icon_url = hit.get("icon_url")
+    gallery  = hit.get("gallery", [])
+
     embed = discord.Embed(
-        title="N4CX RULES SERVER",
-        color=discord.Color.from_str("#ff7043")
+        title=title,
+        description=desc[:300] + ("..." if len(desc) > 300 else ""),
+        color=0x1bd96a
     )
 
-    if image_url:
-        embed.set_image(url=image_url)
+    # Gambar: utamakan gallery, fallback ke icon
+    if gallery:
+        embed.set_image(url=gallery[0])
+    elif icon_url:
+        embed.set_image(url=icon_url)
 
-    # Teks muncul di bawah foto
-    if isi:
-        embed.add_field(name="", value=isi, inline=False)
+    embed.set_footer(text=f"Modrinth • {index+1}/{total} • N4CX Bot")
+    return embed
 
-    embed.set_footer(text="Harap patuhi rules yang berlaku!")
 
-    await rules_ch.send(embed=embed)
-    await ctx.send("✅ Rules berhasil dikirim!")
+class ModrinthNavView(discord.ui.View):
+    def __init__(self, hits: list, facet_type: str, index: int = 0):
+        super().__init__(timeout=60)
+        self.hits       = hits
+        self.facet_type = facet_type
+        self.index      = index
+        self._rebuild()
+
+    def _rebuild(self):
+        self.clear_items()
+        # Download button
+        slug    = self.hits[self.index].get("slug", "")
+        dl_link = f"https://modrinth.com/{self.facet_type}/{slug}"
+        self.add_item(discord.ui.Button(
+            label="⬇️ Download",
+            style=discord.ButtonStyle.link,
+            url=dl_link,
+            row=0
+        ))
+        # Prev button
+        prev = discord.ui.Button(label="◀ Prev", style=discord.ButtonStyle.secondary, row=1, disabled=(self.index == 0))
+        prev.callback = self._prev
+        self.add_item(prev)
+        # Next button
+        nxt = discord.ui.Button(label="Next ▶", style=discord.ButtonStyle.secondary, row=1, disabled=(self.index >= len(self.hits) - 1))
+        nxt.callback = self._next
+        self.add_item(nxt)
+
+    async def _prev(self, interaction: discord.Interaction):
+        self.index -= 1
+        self._rebuild()
+        embed = make_modrinth_embed(self.hits[self.index], self.facet_type, self.index, len(self.hits))
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _next(self, interaction: discord.Interaction):
+        self.index += 1
+        self._rebuild()
+        embed = make_modrinth_embed(self.hits[self.index], self.facet_type, self.index, len(self.hits))
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+@bot.command(name="mod")
+async def search_mod(ctx, *, query: str = ""):
+    """Cari mod di Modrinth. Usage: !mod <nama>"""
+    if not query:
+        await ctx.send("❌ Tulis nama mod! Contoh: `!mod sodium`")
+        return
+    msg  = await ctx.send(f"🔍 Mencari mod **{query}**...")
+    hits = await search_modrinth(query, "mod")
+    if not hits:
+        await msg.edit(content=f"❌ Mod **{query}** tidak ditemukan.")
+        return
+    embed = make_modrinth_embed(hits[0], "mod", 0, len(hits))
+    await msg.edit(content=None, embed=embed, view=ModrinthNavView(hits, "mod"))
+
+
+@bot.command(name="shader")
+async def search_shader(ctx, *, query: str = ""):
+    """Cari shader di Modrinth. Usage: !shader <nama>"""
+    if not query:
+        await ctx.send("❌ Tulis nama shader! Contoh: `!shader complementary`")
+        return
+    msg  = await ctx.send(f"🔍 Mencari shader **{query}**...")
+    hits = await search_modrinth(query, "shader")
+    if not hits:
+        await msg.edit(content=f"❌ Shader **{query}** tidak ditemukan.")
+        return
+    embed = make_modrinth_embed(hits[0], "shader", 0, len(hits))
+    await msg.edit(content=None, embed=embed, view=ModrinthNavView(hits, "shader"))
+
+
+@bot.command(name="rp")
+async def search_rp(ctx, *, query: str = ""):
+    """Cari resource pack di Modrinth. Usage: !rp <nama>"""
+    if not query:
+        await ctx.send("❌ Tulis nama resource pack! Contoh: `!rp faithful`")
+        return
+    msg  = await ctx.send(f"🔍 Mencari resource pack **{query}**...")
+    hits = await search_modrinth(query, "rp")
+    if not hits:
+        await msg.edit(content=f"❌ Resource pack **{query}** tidak ditemukan.")
+        return
+    embed = make_modrinth_embed(hits[0], "rp", 0, len(hits))
+    await msg.edit(content=None, embed=embed, view=ModrinthNavView(hits, "rp"))
 
 
 bot.run(os.environ.get("TOKEN"))
