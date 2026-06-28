@@ -21,7 +21,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"✅ Login sebagai {bot.user}")
-    print("📢 Bot siap digunakan!")
+    print("📢 Bot siap digunakan bos!")
     await auto_join_voice()
 
 
